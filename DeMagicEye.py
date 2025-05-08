@@ -1,12 +1,10 @@
-#from SimpleCV import Image, Display, Color
 from multiprocessing import Process, Queue
 import numpy as np
 import cv2
-import copy
 import sys
 
 
-# caclulate the value of a row
+# calculate the value of a row
 # using the integral image
 def idxToSum(x1, x2, y, integral):
 	# assume x2 > x1
@@ -42,16 +40,15 @@ def findOptimalWindow(img, integral, minSplit=4, maxSplit=16):
 
 
 # get depth map
-def doMagicEye(img, integral, window, samplesz, queue, width, height):
+def doMagicEye(img, integral, window, samplesz, queue):
 	height = img.shape[0]
 	width = img.shape[1]
-	print(width, height, window, samplesz, queue)
 
-	dmap = np.zeros([width - window, height], dtype='int32')
+	dmap = np.zeros([height, width - window], dtype='int32')
 	# really wish I could get rid of this iteration
 	for vidx in range(1, height - 1):  # for each row
 		if vidx % 10 == 0:
-			print("row {0}".format(vidx))
+			print(f"row {vidx}")
 		for hidx in range(1, width - window - 1):  # for each pixel in the row
 			# get the sum of a horz chunk
 			sample = idxToSum(hidx, hidx + samplesz, vidx, integral)
@@ -62,7 +59,7 @@ def doMagicEye(img, integral, window, samplesz, queue, width, height):
 			# find the minimum match
 			best = np.where(np.array(vals) == np.min(vals))[0]
 			# offset is the hidx of the current window
-			dmap[hidx][vidx] = best[-1]  # if we get > 1 use the furthest one
+			dmap[vidx][hidx] = best[-1]  # if we get > 1 use the furthest one
 	# create the raw out
 	queue.put(dmap)
 
@@ -71,7 +68,6 @@ def doMagicEye(img, integral, window, samplesz, queue, width, height):
 def parallelizeMatching(numProc, img, integral, window, samplesz):
 	height = img.shape[0]
 	width = img.shape[1]
-	print(f"Integral: {integral.shape}")
 
 	# create queues
 	queues = [Queue() for i in range(0, numProc)]
@@ -79,16 +75,16 @@ def parallelizeMatching(numProc, img, integral, window, samplesz):
 	processes = [Process(target=doMagicEye,
 						 args=(img[i * height // numProc:(i + 1) * height // numProc, :],
 							   integral[i * height // numProc:(i + 1) * height // numProc, :],
-							   window, samplesz, queues[i], width, height))
+							   window, samplesz, queues[i]))
 				 for i in range(0, numProc)]
 	# and go!
 	[p.start() for p in processes]
 	# get the chunks from the process
 	chunks = [q.get() for q in queues]
-	dmap = np.zeros([width - window, height], dtype='int32')
+	dmap = np.zeros([height, width - window], dtype='int32')
 	# reassemble the chunks
 	for i, chunk in zip(range(0, numProc), chunks):
-		dmap[:, i * height // numProc:(i + 1) * height // numProc] = chunk
+		dmap[i * height // numProc:(i + 1) * height // numProc, :] = chunk
 	# kill the processes
 	[p.terminate() for p in processes]
 	return dmap
@@ -111,26 +107,21 @@ if __name__ == "__main__":
 	img = cv2.imread(ifile)
 	height = img.shape[0]
 	width = img.shape[1]
-	# img = img.scale(1)
 	# create the integral image
-	print("!!!!!!!!!!!!!!!!!!", type(cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)))
 	integral = cv2.integral(cv2.cvtColor(img, cv2.COLOR_BGR2GRAY))
 
 	# find our search window and make it big
 	window = int(searchWndw * findOptimalWindow(img, integral))
 	print(searchWndw)
-	print("image: {0}x{1}".format(width, height))
-	print("window: {0}".format(window))
+	print(f"image: {width}x{height}")
+	print(f"window: {window}")
 
 	# how big of a signal we match on
 	samplesz = window // 10
-	print("sample: {0}".format(samplesz))
+	print(f"sample: {samplesz}")
 	numProc = 4
 	dmap = parallelizeMatching(numProc, img, integral, window, samplesz)
-	print(dmap.flags)
-	#result = cv2.imdecode(dmap, cv2.IMREAD_GRAYSCALE)# Image(dmap)
-	#result = cv2.imwrite(f"{stub}Equalized.png", sbs)
-	cv2.imwrite('{0}RAW.png'.format(stub), dmap)
+	cv2.imwrite(f"{stub}RAW.png", dmap)
 
 	# create the cleaned up output
 	# read and convert to grayscale again due to opencv unsupported format error
@@ -139,7 +130,7 @@ if __name__ == "__main__":
 	cv2.equalizeHist(result, result)  # equalize
 	result = -result  # invert
 	cv2.blur(result, (5, 5), result)  # blur window=(5, 5)
-	cv2.imwrite('{0}Equalized.png'.format(stub), result)
+	cv2.imwrite(f"{stub}Equalized.png", result)
 
 	# I don't think side by side is that necessary, could add back later
 	#sbs = img.sideBySide(result)
