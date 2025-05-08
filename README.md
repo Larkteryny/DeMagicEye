@@ -1,16 +1,14 @@
 DeMagicEye
 ==========
 
-Reverse's magic eye images into depth maps. 
+Reverse's magic eye images into depth maps.
 
 
-Installation
+Dependencies (Python 3)
 ============
 
-How to install SimpleCV on Ubuntu
-
-    sudo apt-get install ipython python-opencv python-scipy python-numpy python-pygame python-setuptools python-pip 
-    sudo pip install https://github.com/sightmachine/SimpleCV/zipball/develop
+- numpy
+- opencv
 
 
 Usage
@@ -18,7 +16,13 @@ Usage
 
 To create a depth map from an autostereogram, simply pass it as an argument the DeMagicEye.py script, along with a file name stub for output
 
+Usage:
+
+    DeMagicEye <infile> <outfile_stem> [search_window]
+
+Example:
+
     python DeMagicEye.py autostereograms/face.gif face_output
 
-You will see the output images generated in the working directory
+You will see two output images generated at <outfile_stem>RAW.png and <outfile_stem>Equalized.png
 
